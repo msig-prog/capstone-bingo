@@ -30,13 +30,19 @@ import net.runelite.client.util.ImageUtil;
 
 public class CapstoneClanBingoBoardWindow extends JDialog
 {
-    private static final int CROP_HEIGHT = 1310;
-    private static final int PREFERRED_WIDTH = 650;
-
     /*
-     * One automatic refresh per minute while
-     * the board is actually open.
+     * IMPORTANT:
+     * The bundled board.png is intentionally much smaller than these values
+     * to satisfy Plugin Hub image-size limits.
+     *
+     * These are the coordinate dimensions used when the clickable grid was
+     * calibrated against the original artwork. All click/overlay math stays
+     * in this logical coordinate system, regardless of the actual PNG size.
      */
+    private static final int LOGICAL_BOARD_WIDTH = 1024;
+    private static final int LOGICAL_BOARD_HEIGHT = 1310;
+
+    private static final int PREFERRED_WIDTH = 650;
     private static final int REFRESH_INTERVAL_MS = 60_000;
 
     private static final DateTimeFormatter TIME_FORMAT =
@@ -54,7 +60,6 @@ public class CapstoneClanBingoBoardWindow extends JDialog
 
     private final String teamCode;
     private final String playerName;
-
     private final CapstoneClanBingoApiClient apiClient;
 
     private final CapstoneClanBingoApiClient.TileData[] tiles =
@@ -64,7 +69,6 @@ public class CapstoneClanBingoBoardWindow extends JDialog
             new boolean[36];
 
     private BingoBoardPanel boardPanel;
-
     private final Timer syncTimer;
 
     private boolean refreshInProgress;
@@ -92,74 +96,41 @@ public class CapstoneClanBingoBoardWindow extends JDialog
     {
         super(owner);
 
-        this.teamCode =
-                teamCode;
-
-        this.playerName =
-                playerName;
-
-        this.apiClient =
-                apiClient;
+        this.teamCode = teamCode;
+        this.playerName = playerName;
+        this.apiClient = apiClient;
 
         setUndecorated(true);
-
-        setDefaultCloseOperation(
-                JDialog.DISPOSE_ON_CLOSE
-        );
-
+        setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         setResizable(false);
 
         initializeEmptyTiles();
+        applyBoard(initialBoard);
 
-        applyBoard(
-                initialBoard
-        );
-
-        BufferedImage originalImage =
+        /*
+         * The optimized bundled image is 440x563. We do NOT use its pixel
+         * dimensions for click mapping; the logical 1024x1310 coordinate
+         * system above is used instead.
+         */
+        BufferedImage boardImage =
                 ImageUtil.loadImageResource(
                         CapstoneClanBingoBoardWindow.class,
                         "board.png"
                 );
 
-        int croppedHeight =
-                Math.min(
-                        CROP_HEIGHT,
-                        originalImage.getHeight()
-                );
-
-        BufferedImage croppedImage =
-                originalImage.getSubimage(
-                        0,
-                        0,
-                        originalImage.getWidth(),
-                        croppedHeight
-                );
-
         int displayWidth =
-                calculateDisplayWidth(
-                        owner,
-                        croppedImage
-                );
+                calculateDisplayWidth(owner);
 
         boardPanel =
                 new BingoBoardPanel(
-                        croppedImage,
+                        boardImage,
                         displayWidth
                 );
 
-        setContentPane(
-                boardPanel
-        );
-
+        setContentPane(boardPanel);
         pack();
+        setLocationRelativeTo(owner);
 
-        setLocationRelativeTo(
-                owner
-        );
-
-        /*
-         * Background collaboration refresh.
-         */
         syncTimer =
                 new Timer(
                         REFRESH_INTERVAL_MS,
@@ -183,11 +154,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
 
     private void initializeEmptyTiles()
     {
-        for (
-                int i = 0;
-                i < tiles.length;
-                i++
-        )
+        for (int i = 0; i < tiles.length; i++)
         {
             tiles[i] =
                     createOpenTile(i);
@@ -198,10 +165,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
             CapstoneClanBingoApiClient.BoardResponse board
     )
     {
-        if (
-                board == null
-                        || board.tiles == null
-        )
+        if (board == null || board.tiles == null)
         {
             return;
         }
@@ -221,10 +185,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
             int index =
                     incoming.tileNumber - 1;
 
-            if (
-                    index < 0
-                            || index >= tiles.length
-            )
+            if (index < 0 || index >= tiles.length)
             {
                 continue;
             }
@@ -252,11 +213,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
             return;
         }
 
-        refreshInProgress =
-                true;
-
-        syncState =
-                SyncState.SYNCING;
+        refreshInProgress = true;
+        syncState = SyncState.SYNCING;
 
         if (boardPanel != null)
         {
@@ -267,8 +225,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 teamCode,
                 (success, board, message) ->
                 {
-                    refreshInProgress =
-                            false;
+                    refreshInProgress = false;
 
                     if (!isDisplayable())
                     {
@@ -277,9 +234,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
 
                     if (!success)
                     {
-                        syncState =
-                                SyncState.OFFLINE;
-
+                        syncState = SyncState.OFFLINE;
                         boardPanel.repaint();
 
                         if (showError)
@@ -296,15 +251,10 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                         return;
                     }
 
-                    applyBoard(
-                            board
-                    );
+                    applyBoard(board);
 
-                    syncState =
-                            SyncState.SYNCED;
-
-                    lastSyncTime =
-                            formatCurrentTime();
+                    syncState = SyncState.SYNCED;
+                    lastSyncTime = formatCurrentTime();
 
                     boardPanel.repaint();
                 }
@@ -325,8 +275,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
     }
 
     private int calculateDisplayWidth(
-            Window owner,
-            BufferedImage image
+            Window owner
     )
     {
         int width =
@@ -353,8 +302,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 (int) Math.floor(
                         availableHeight
                                 * (
-                                image.getWidth()
-                                        / (double) image.getHeight()
+                                LOGICAL_BOARD_WIDTH
+                                        / (double) LOGICAL_BOARD_HEIGHT
                         )
                 );
 
@@ -403,22 +352,30 @@ public class CapstoneClanBingoBoardWindow extends JDialog
             this.displayWidth =
                     displayWidth;
 
+            /*
+             * Use the logical board ratio rather than the optimized PNG's
+             * physical dimensions.
+             */
             displayHeight =
                     (int) Math.round(
-                            boardImage.getHeight()
+                            displayWidth
                                     * (
-                                    displayWidth
-                                            / (double) boardImage.getWidth()
+                                    LOGICAL_BOARD_HEIGHT
+                                            / (double) LOGICAL_BOARD_WIDTH
                             )
                     );
 
+            /*
+             * Mouse coordinates and overlays are mapped back to the original
+             * 1024x1310 calibration coordinates.
+             */
             scaleX =
                     displayWidth
-                            / (double) boardImage.getWidth();
+                            / (double) LOGICAL_BOARD_WIDTH;
 
             scaleY =
                     displayHeight
-                            / (double) boardImage.getHeight();
+                            / (double) LOGICAL_BOARD_HEIGHT;
 
             scaledImage =
                     boardImage.getScaledInstance(
@@ -444,9 +401,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                                 MouseEvent event
                         )
                         {
-                            handlePopup(
-                                    event
-                            );
+                            handlePopup(event);
 
                             if (
                                     !SwingUtilities.isLeftMouseButton(
@@ -499,15 +454,10 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                                 MouseEvent event
                         )
                         {
-                            handlePopup(
-                                    event
-                            );
+                            handlePopup(event);
 
-                            dragStartScreen =
-                                    null;
-
-                            dragStartWindow =
-                                    null;
+                            dragStartScreen = null;
+                            dragStartWindow = null;
                         }
 
                         @Override
@@ -554,9 +504,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                                 return;
                             }
 
-                            handleLeftClick(
-                                    tileIndex
-                            );
+                            handleLeftClick(tileIndex);
                         }
                     }
             );
@@ -618,38 +566,22 @@ public class CapstoneClanBingoBoardWindow extends JDialog
 
             if ("OPEN".equals(current.status))
             {
-                proposed.status =
-                        "OWNED";
-
-                proposed.owner =
-                        playerName;
-
-                proposed.progress =
-                        null;
-
-                proposed.aidRequested =
-                        false;
-
-                proposed.helpers =
-                        new ArrayList<>();
+                proposed.status = "OWNED";
+                proposed.owner = playerName;
+                proposed.progress = null;
+                proposed.aidRequested = false;
+                proposed.helpers = new ArrayList<>();
             }
             else if ("OWNED".equals(current.status))
             {
-                proposed.status =
-                        "COMPLETE";
-
-                proposed.progress =
-                        null;
-
-                proposed.aidRequested =
-                        false;
+                proposed.status = "COMPLETE";
+                proposed.progress = null;
+                proposed.aidRequested = false;
             }
             else
             {
                 proposed =
-                        createOpenTile(
-                                tileIndex
-                        );
+                        createOpenTile(tileIndex);
             }
 
             saveProposedTile(
@@ -752,20 +684,11 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 CapstoneClanBingoApiClient.TileData proposed =
                         current.copy();
 
-                proposed.status =
-                        "OWNED";
-
-                proposed.owner =
-                        playerName;
-
-                proposed.progress =
-                        null;
-
-                proposed.aidRequested =
-                        false;
-
-                proposed.helpers =
-                        new ArrayList<>();
+                proposed.status = "OWNED";
+                proposed.owner = playerName;
+                proposed.progress = null;
+                proposed.aidRequested = false;
+                proposed.helpers = new ArrayList<>();
 
                 saveProposedTile(
                         tileIndex,
@@ -784,14 +707,9 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                             playerName;
                 }
 
-                proposed.status =
-                        "COMPLETE";
-
-                proposed.progress =
-                        null;
-
-                proposed.aidRequested =
-                        false;
+                proposed.status = "COMPLETE";
+                proposed.progress = null;
+                proposed.aidRequested = false;
 
                 saveProposedTile(
                         tileIndex,
@@ -817,9 +735,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 }
 
                 String normalized =
-                        normalizeProgress(
-                                input
-                        );
+                        normalizeProgress(input);
 
                 if (normalized == null)
                 {
@@ -836,8 +752,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 CapstoneClanBingoApiClient.TileData proposed =
                         current.copy();
 
-                proposed.status =
-                        "OWNED";
+                proposed.status = "OWNED";
 
                 if (proposed.owner == null)
                 {
@@ -866,11 +781,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
 
                 if ("OPEN".equals(proposed.status))
                 {
-                    proposed.status =
-                            "OWNED";
-
-                    proposed.owner =
-                            playerName;
+                    proposed.status = "OWNED";
+                    proposed.owner = playerName;
                 }
 
                 if (
@@ -1001,11 +913,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 return;
             }
 
-            tileBusy[tileIndex] =
-                    true;
-
-            syncState =
-                    SyncState.SYNCING;
+            tileBusy[tileIndex] = true;
+            syncState = SyncState.SYNCING;
 
             repaint();
 
@@ -1014,13 +923,11 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     proposed,
                     (success, savedTile, message) ->
                     {
-                        tileBusy[tileIndex] =
-                                false;
+                        tileBusy[tileIndex] = false;
 
                         if (!success)
                         {
-                            syncState =
-                                    SyncState.OFFLINE;
+                            syncState = SyncState.OFFLINE;
 
                             repaint();
 
@@ -1038,11 +945,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                         tiles[tileIndex] =
                                 savedTile.copy();
 
-                        syncState =
-                                SyncState.SYNCED;
-
-                        lastSyncTime =
-                                formatCurrentTime();
+                        syncState = SyncState.SYNCED;
+                        lastSyncTime = formatCurrentTime();
 
                         repaint();
                     }
@@ -1078,10 +982,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                             GRID_Y
                     );
 
-            if (
-                    row == -1
-                            || column == -1
-            )
+            if (row == -1 || column == -1)
             {
                 return -1;
             }
@@ -1096,9 +997,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 Graphics graphics
         )
         {
-            super.paintComponent(
-                    graphics
-            );
+            super.paintComponent(graphics);
 
             Graphics2D g2 =
                     (Graphics2D) graphics.create();
@@ -1120,17 +1019,9 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     null
             );
 
-            for (
-                    int row = 0;
-                    row < 6;
-                    row++
-            )
+            for (int row = 0; row < 6; row++)
             {
-                for (
-                        int column = 0;
-                        column < 6;
-                        column++
-                )
+                for (int column = 0; column < 6; column++)
                 {
                     int tileIndex =
                             (
@@ -1159,9 +1050,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 }
             }
 
-            drawTopControls(
-                    g2
-            );
+            drawTopControls(g2);
 
             g2.setColor(
                     new Color(
@@ -1173,9 +1062,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
             );
 
             g2.setStroke(
-                    new BasicStroke(
-                            2f
-                    )
+                    new BasicStroke(2f)
             );
 
             g2.drawRect(
@@ -1192,17 +1079,10 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 Graphics2D g2
         )
         {
-            int buttonSize =
-                    26;
+            int buttonSize = 26;
+            int top = 8;
 
-            int top =
-                    8;
-
-            /*
-             * Refresh button.
-             */
-            int refreshX =
-                    8;
+            int refreshX = 8;
 
             refreshButtonBounds.setBounds(
                     refreshX,
@@ -1229,9 +1109,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     8
             );
 
-            g2.setColor(
-                    Color.WHITE
-            );
+            g2.setColor(Color.WHITE);
 
             g2.setFont(
                     new Font(
@@ -1249,19 +1127,13 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     top + 19
             );
 
-            /*
-             * Sync status badge.
-             */
             String syncText;
-
             Color syncColor;
 
             switch (syncState)
             {
                 case SYNCING:
-                    syncText =
-                            "SYNCING";
-
+                    syncText = "SYNCING";
                     syncColor =
                             new Color(
                                     210,
@@ -1271,9 +1143,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     break;
 
                 case OFFLINE:
-                    syncText =
-                            "OFFLINE";
-
+                    syncText = "OFFLINE";
                     syncColor =
                             new Color(
                                     180,
@@ -1283,9 +1153,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     break;
 
                 default:
-                    syncText =
-                            "SYNCED";
-
+                    syncText = "SYNCED";
                     syncColor =
                             new Color(
                                     45,
@@ -1305,9 +1173,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
 
             int textWidth =
                     g2.getFontMetrics()
-                            .stringWidth(
-                                    syncText
-                            );
+                            .stringWidth(syncText);
 
             int badgeWidth =
                     textWidth + 18;
@@ -1335,9 +1201,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     8
             );
 
-            g2.setColor(
-                    Color.WHITE
-            );
+            g2.setColor(Color.WHITE);
 
             drawCenteredText(
                     g2,
@@ -1347,13 +1211,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     top + 17
             );
 
-            /*
-             * Tiny last-sync timestamp.
-             */
-            if (
-                    syncState
-                            == SyncState.SYNCED
-            )
+            if (syncState == SyncState.SYNCED)
             {
                 g2.setFont(
                         new Font(
@@ -1381,9 +1239,6 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 );
             }
 
-            /*
-             * Close button.
-             */
             int closeX =
                     displayWidth
                             - buttonSize
@@ -1414,9 +1269,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     8
             );
 
-            g2.setColor(
-                    Color.WHITE
-            );
+            g2.setColor(Color.WHITE);
 
             g2.setFont(
                     new Font(
@@ -1548,9 +1401,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
             );
 
             g2.setStroke(
-                    new BasicStroke(
-                            2f
-                    )
+                    new BasicStroke(2f)
             );
 
             g2.drawRect(
@@ -1573,8 +1424,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
 
             if (complete)
             {
-                statusText =
-                        "COMPLETE";
+                statusText = "COMPLETE";
             }
             else if (
                     aidRequested
@@ -1696,7 +1546,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 )
                 {
                     names.add(
-                            "+ " + helper
+                            "+ "
+                                    + helper
                     );
                 }
             }
@@ -1717,8 +1568,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                             - statusHeight
                             - 14;
 
-            int lineHeight =
-                    11;
+            int lineHeight = 11;
 
             int maxLines =
                     Math.max(
@@ -1726,7 +1576,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                             Math.min(
                                     3,
                                     (
-                                            availableHeight - 6
+                                            availableHeight
+                                                    - 6
                                     ) / lineHeight
                             )
                     );
@@ -1734,14 +1585,9 @@ public class CapstoneClanBingoBoardWindow extends JDialog
             List<String> visibleLines =
                     new ArrayList<>();
 
-            if (
-                    names.size()
-                            <= maxLines
-            )
+            if (names.size() <= maxLines)
             {
-                visibleLines.addAll(
-                        names
-                );
+                visibleLines.addAll(names);
             }
             else
             {
@@ -1759,7 +1605,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 int remaining =
                         names.size()
                                 - (
-                                maxLines - 1
+                                maxLines
+                                        - 1
                         );
 
                 visibleLines.add(
@@ -1827,10 +1674,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
             int baseline =
                     panelY + 12;
 
-            for (
-                    String line
-                    : visibleLines
-            )
+            for (String line : visibleLines)
             {
                 String fitted =
                         fitText(
@@ -1847,8 +1691,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                         baseline
                 );
 
-                baseline +=
-                        lineHeight;
+                baseline += lineHeight;
             }
         }
     }
@@ -1863,20 +1706,11 @@ public class CapstoneClanBingoBoardWindow extends JDialog
         tile.tileNumber =
                 tileIndex + 1;
 
-        tile.status =
-                "OPEN";
-
-        tile.owner =
-                null;
-
-        tile.progress =
-                null;
-
-        tile.aidRequested =
-                false;
-
-        tile.helpers =
-                new ArrayList<>();
+        tile.status = "OPEN";
+        tile.owner = null;
+        tile.progress = null;
+        tile.aidRequested = false;
+        tile.helpers = new ArrayList<>();
 
         return tile;
     }
@@ -1895,10 +1729,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
             return false;
         }
 
-        for (
-                String helper
-                : tile.helpers
-        )
+        for (String helper : tile.helpers)
         {
             if (
                     samePlayer(
@@ -1988,7 +1819,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     return null;
                 }
 
-                return percent + "%";
+                return percent
+                        + "%";
             }
             catch (NumberFormatException exception)
             {
@@ -2053,8 +1885,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
         {
             if (
                     value >= boundaries[i]
-                            && value
-                            < boundaries[i + 1]
+                            && value < boundaries[i + 1]
             )
             {
                 return i;
@@ -2074,9 +1905,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
     {
         int textWidth =
                 g2.getFontMetrics()
-                        .stringWidth(
-                                text
-                        );
+                        .stringWidth(text);
 
         int textX =
                 x
@@ -2101,9 +1930,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
     {
         int textWidth =
                 g2.getFontMetrics()
-                        .stringWidth(
-                                text
-                        );
+                        .stringWidth(text);
 
         int textX =
                 x
@@ -2126,9 +1953,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 baselineY + 1
         );
 
-        g2.setColor(
-                Color.WHITE
-        );
+        g2.setColor(Color.WHITE);
 
         g2.drawString(
                 text,
@@ -2145,9 +1970,7 @@ public class CapstoneClanBingoBoardWindow extends JDialog
     {
         if (
                 g2.getFontMetrics()
-                        .stringWidth(
-                                text
-                        )
+                        .stringWidth(text)
                         <= maxWidth
         )
         {
@@ -2161,7 +1984,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                 shortened.length() > 1
                         && g2.getFontMetrics()
                         .stringWidth(
-                                shortened + "..."
+                                shortened
+                                        + "..."
                         )
                         > maxWidth
         )
@@ -2173,7 +1997,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     );
         }
 
-        return shortened + "...";
+        return shortened
+                + "...";
     }
 
     private int clamp(

@@ -31,16 +31,28 @@ import net.runelite.client.util.ImageUtil;
 public class CapstoneClanBingoBoardWindow extends JDialog
 {
     /*
-     * IMPORTANT:
-     * The bundled board.png is intentionally much smaller than these values
-     * to satisfy Plugin Hub image-size limits.
+     * The artwork is stored as six full-resolution horizontal strips so each
+     * individual image stays below Plugin Hub's decoded-image size limit.
      *
-     * These are the coordinate dimensions used when the clickable grid was
-     * calibrated against the original artwork. All click/overlay math stays
-     * in this logical coordinate system, regardless of the actual PNG size.
+     * Together they reconstruct the original 1024 x 1310 board exactly.
      */
     private static final int LOGICAL_BOARD_WIDTH = 1024;
     private static final int LOGICAL_BOARD_HEIGHT = 1310;
+
+    private static final int[] STRIP_HEIGHTS =
+            {
+                    219, 219, 219, 219, 219, 215
+            };
+
+    private static final String[] STRIP_FILES =
+            {
+                    "board_0.png",
+                    "board_1.png",
+                    "board_2.png",
+                    "board_3.png",
+                    "board_4.png",
+                    "board_5.png"
+            };
 
     private static final int PREFERRED_WIDTH = 650;
     private static final int REFRESH_INTERVAL_MS = 60_000;
@@ -107,23 +119,24 @@ public class CapstoneClanBingoBoardWindow extends JDialog
         initializeEmptyTiles();
         applyBoard(initialBoard);
 
-        /*
-         * The optimized bundled image is 440x563. We do NOT use its pixel
-         * dimensions for click mapping; the logical 1024x1310 coordinate
-         * system above is used instead.
-         */
-        BufferedImage boardImage =
-                ImageUtil.loadImageResource(
-                        CapstoneClanBingoBoardWindow.class,
-                        "board.png"
-                );
+        BufferedImage[] boardStrips =
+                new BufferedImage[STRIP_FILES.length];
+
+        for (int i = 0; i < STRIP_FILES.length; i++)
+        {
+            boardStrips[i] =
+                    ImageUtil.loadImageResource(
+                            CapstoneClanBingoBoardWindow.class,
+                            STRIP_FILES[i]
+                    );
+        }
 
         int displayWidth =
                 calculateDisplayWidth(owner);
 
         boardPanel =
                 new BingoBoardPanel(
-                        boardImage,
+                        boardStrips,
                         displayWidth
                 );
 
@@ -327,7 +340,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
 
     private class BingoBoardPanel extends JPanel
     {
-        private final Image scaledImage;
+        private final Image[] scaledStrips;
+        private final int[] stripDisplayHeights;
 
         private final int displayWidth;
         private final int displayHeight;
@@ -345,17 +359,13 @@ public class CapstoneClanBingoBoardWindow extends JDialog
         private Point dragStartWindow;
 
         BingoBoardPanel(
-                BufferedImage boardImage,
+                BufferedImage[] boardStrips,
                 int displayWidth
         )
         {
             this.displayWidth =
                     displayWidth;
 
-            /*
-             * Use the logical board ratio rather than the optimized PNG's
-             * physical dimensions.
-             */
             displayHeight =
                     (int) Math.round(
                             displayWidth
@@ -365,10 +375,6 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                             )
                     );
 
-            /*
-             * Mouse coordinates and overlays are mapped back to the original
-             * 1024x1310 calibration coordinates.
-             */
             scaleX =
                     displayWidth
                             / (double) LOGICAL_BOARD_WIDTH;
@@ -377,12 +383,53 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     displayHeight
                             / (double) LOGICAL_BOARD_HEIGHT;
 
-            scaledImage =
-                    boardImage.getScaledInstance(
-                            displayWidth,
-                            displayHeight,
-                            Image.SCALE_SMOOTH
-                    );
+            scaledStrips =
+                    new Image[boardStrips.length];
+
+            stripDisplayHeights =
+                    new int[boardStrips.length];
+
+            /*
+             * Calculate each rendered strip from the same logical scale so
+             * there are no visual seams or coordinate drift.
+             *
+             * The final strip is assigned any rounding remainder so the six
+             * pieces always total exactly displayHeight pixels.
+             */
+            int usedDisplayHeight = 0;
+
+            for (int i = 0; i < boardStrips.length; i++)
+            {
+                int stripHeight;
+
+                if (i == boardStrips.length - 1)
+                {
+                    stripHeight =
+                            displayHeight
+                                    - usedDisplayHeight;
+                }
+                else
+                {
+                    stripHeight =
+                            (int) Math.round(
+                                    STRIP_HEIGHTS[i]
+                                            * scaleY
+                            );
+                }
+
+                stripDisplayHeights[i] =
+                        stripHeight;
+
+                scaledStrips[i] =
+                        boardStrips[i].getScaledInstance(
+                                displayWidth,
+                                stripHeight,
+                                Image.SCALE_SMOOTH
+                        );
+
+                usedDisplayHeight +=
+                        stripHeight;
+            }
 
             setPreferredSize(
                     new Dimension(
@@ -1012,12 +1059,23 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                     RenderingHints.VALUE_TEXT_ANTIALIAS_ON
             );
 
-            g2.drawImage(
-                    scaledImage,
-                    0,
-                    0,
-                    null
-            );
+            /*
+             * Reconstruct the board from its six full-resolution strips.
+             */
+            int drawY = 0;
+
+            for (int i = 0; i < scaledStrips.length; i++)
+            {
+                g2.drawImage(
+                        scaledStrips[i],
+                        0,
+                        drawY,
+                        null
+                );
+
+                drawY +=
+                        stripDisplayHeights[i];
+            }
 
             for (int row = 0; row < 6; row++)
             {
@@ -1533,17 +1591,12 @@ public class CapstoneClanBingoBoardWindow extends JDialog
 
             if (tile.owner != null)
             {
-                names.add(
-                        tile.owner
-                );
+                names.add(tile.owner);
             }
 
             if (tile.helpers != null)
             {
-                for (
-                        String helper
-                        : tile.helpers
-                )
+                for (String helper : tile.helpers)
                 {
                     names.add(
                             "+ "
@@ -1691,7 +1744,8 @@ public class CapstoneClanBingoBoardWindow extends JDialog
                         baseline
                 );
 
-                baseline += lineHeight;
+                baseline +=
+                        lineHeight;
             }
         }
     }

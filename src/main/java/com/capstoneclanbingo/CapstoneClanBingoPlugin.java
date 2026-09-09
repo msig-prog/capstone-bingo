@@ -69,7 +69,7 @@ public class CapstoneClanBingoPlugin extends Plugin
 		BufferedImage icon =
 				ImageUtil.loadImageResource(
 						getClass(),
-						"board.png"
+						"nav_icon.png"
 				);
 
 		navButton =

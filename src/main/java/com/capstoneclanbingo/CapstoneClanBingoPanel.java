@@ -528,6 +528,22 @@ public class CapstoneClanBingoPanel extends PluginPanel
 
     private void detectPlayerAndLoadBoard()
     {
+        // TEMP DEV BYPASS — REMOVE BEFORE FINAL PLUGIN COMMIT
+        if ("FS73DA".equalsIgnoreCase(joinedTeamCode))
+        {
+            currentPlayerName = "DevTester";
+
+            playerStatusLabel.setText(
+                    "<html><center>"
+                            + "Player:"
+                            + "<br>"
+                            + "<b>DevTester</b>"
+                            + "</center></html>"
+            );
+
+            loadBoard();
+            return;
+        }
         if (joinedTeamCode == null)
         {
             return;

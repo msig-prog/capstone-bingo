@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.Window;
+import java.awt.image.BufferedImage;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -16,6 +17,9 @@ import net.runelite.client.ui.PluginPanel;
 
 public class CapstoneClanBingoPanel extends PluginPanel
 {
+    private static final String DEV_TEAM_CODE = "205";
+    private static final String DEV_PLAYER_NAME = "DevTester";
+
     private final CapstoneClanBingoApiClient apiClient;
     private final CapstoneClanBingoPlayerProvider playerProvider;
     private final CapstoneClanBingoConfig config;
@@ -24,11 +28,9 @@ public class CapstoneClanBingoPanel extends PluginPanel
     private CapstoneClanBingoBoardWindow boardWindow;
 
     private final JTextField teamCodeField;
-
     private final JButton joinTeamButton;
     private final JButton forgetTeamButton;
     private final JButton openBoardButton;
-
     private final JLabel teamStatusLabel;
     private final JLabel playerStatusLabel;
 
@@ -47,12 +49,7 @@ public class CapstoneClanBingoPanel extends PluginPanel
         this.config = config;
         this.configManager = configManager;
 
-        setLayout(
-                new BorderLayout(
-                        0,
-                        12
-                )
-        );
+        setLayout(new BorderLayout(0, 12));
 
         JLabel title =
                 new JLabel(
@@ -61,38 +58,27 @@ public class CapstoneClanBingoPanel extends PluginPanel
                 );
 
         JLabel teamCodeLabel =
-                new JLabel(
-                        "Team Code"
-                );
+                new JLabel("Team Code");
 
         teamCodeField =
                 new JTextField();
 
         teamCodeField.setToolTipText(
-                "Enter the 6-character team code from Discord"
+                "Enter the team code from Discord"
         );
 
         teamCodeField.setPreferredSize(
-                new Dimension(
-                        180,
-                        30
-                )
+                new Dimension(180, 30)
         );
 
         joinTeamButton =
-                new JButton(
-                        "Join Team"
-                );
+                new JButton("Join Team");
 
         forgetTeamButton =
-                new JButton(
-                        "Forget Team"
-                );
+                new JButton("Forget Team");
 
         openBoardButton =
-                new JButton(
-                        "Open Bingo Board"
-                );
+                new JButton("Open Bingo Board");
 
         teamStatusLabel =
                 new JLabel(
@@ -122,7 +108,7 @@ public class CapstoneClanBingoPanel extends PluginPanel
 
         openBoardButton.addActionListener(e ->
                 ensureThirdPartyWarningAccepted(
-                        this::detectPlayerAndLoadBoard
+                        this::detectPlayerAndLoadEverything
                 )
         );
 
@@ -140,36 +126,21 @@ public class CapstoneClanBingoPanel extends PluginPanel
                         )
                 );
 
-        teamPanel.add(
-                teamCodeLabel
-        );
-
-        teamPanel.add(
-                teamCodeField
-        );
-
-        teamPanel.add(
-                joinTeamButton
-        );
-
-        teamPanel.add(
-                forgetTeamButton
-        );
-
-        teamPanel.add(
-                teamStatusLabel
-        );
-
-        teamPanel.add(
-                playerStatusLabel
-        );
+        teamPanel.add(teamCodeLabel);
+        teamPanel.add(teamCodeField);
+        teamPanel.add(joinTeamButton);
+        teamPanel.add(forgetTeamButton);
+        teamPanel.add(teamStatusLabel);
+        teamPanel.add(playerStatusLabel);
 
         JLabel instructions =
                 new JLabel(
                         "<html><center>"
-                                + "Problems?"
+                                + "Left click: Claim → Complete → Clear"
                                 + "<br>"
-                                + "Double-check team code and make sure you are logged in to RuneLite."
+                                + "Aid tiles: left click opens roster"
+                                + "<br>"
+                                + "Right click: progress, ownership, aid"
                                 + "</center></html>",
                         SwingConstants.CENTER
                 );
@@ -184,13 +155,8 @@ public class CapstoneClanBingoPanel extends PluginPanel
                         )
                 );
 
-        boardPanel.add(
-                openBoardButton
-        );
-
-        boardPanel.add(
-                instructions
-        );
+        boardPanel.add(openBoardButton);
+        boardPanel.add(instructions);
 
         JPanel centerPanel =
                 new JPanel(
@@ -223,6 +189,21 @@ public class CapstoneClanBingoPanel extends PluginPanel
         loadSavedTeam();
     }
 
+    private boolean isDevTeamCode(
+            String code
+    )
+    {
+        return DEV_TEAM_CODE.equals(code);
+    }
+
+    private boolean isValidTeamCode(
+            String code
+    )
+    {
+        return isDevTeamCode(code)
+                || code.matches("[A-Z0-9]{6}");
+    }
+
     private void loadSavedTeam()
     {
         String savedCode =
@@ -231,56 +212,38 @@ public class CapstoneClanBingoPanel extends PluginPanel
         if (savedCode != null)
         {
             savedCode =
-                    savedCode
-                            .trim()
-                            .toUpperCase();
+                    savedCode.trim().toUpperCase();
         }
 
         if (
                 savedCode != null
-                        && savedCode.matches(
-                        "[A-Z0-9]{6}"
-                )
+                        && isValidTeamCode(savedCode)
         )
         {
-            joinedTeamCode =
-                    savedCode;
-
-            teamCodeField.setText(
-                    savedCode
-            );
-
-            openBoardButton.setEnabled(
-                    true
-            );
-
-            forgetTeamButton.setEnabled(
-                    true
-            );
+            joinedTeamCode = savedCode;
+            teamCodeField.setText(savedCode);
+            openBoardButton.setEnabled(true);
+            forgetTeamButton.setEnabled(true);
 
             teamStatusLabel.setText(
                     "<html><center>"
                             + "Saved team:"
-                            + "<br>"
-                            + "<b>"
+                            + "<br><b>"
                             + savedCode
                             + "</b>"
+                            + (
+                            isDevTeamCode(savedCode)
+                                    ? "<br><span style='color:#d6a64c;'>DEV LOGIN BYPASS</span>"
+                                    : ""
+                    )
                             + "</center></html>"
             );
-
             return;
         }
 
-        joinedTeamCode =
-                null;
-
-        openBoardButton.setEnabled(
-                false
-        );
-
-        forgetTeamButton.setEnabled(
-                false
-        );
+        joinedTeamCode = null;
+        openBoardButton.setEnabled(false);
+        forgetTeamButton.setEnabled(false);
 
         teamStatusLabel.setText(
                 "<html><center>"
@@ -304,25 +267,21 @@ public class CapstoneClanBingoPanel extends PluginPanel
                         + "<div style='width: 360px;'>"
                         + "<b>Third-Party Server Notice</b>"
                         + "<br><br>"
-                        + "Capstone Clan Bingo connects to:"
-                        + "<br>"
-                        + "<b>capstone-bingo-api.levinsteel.workers.dev</b>"
+                        + "Capstone Clan Bingo connects to a third-party "
+                        + "Cloudflare service to load the current board artwork "
+                        + "and synchronize team progress."
                         + "<br><br>"
-                        + "To synchronize your team board, the plugin sends:"
-                        + "<br>"
-                        + "• Your RuneScape display name"
-                        + "<br>"
-                        + "• Your bingo team code"
-                        + "<br>"
-                        + "• Bingo tile ownership, progress, completion, "
-                        + "and aid participation"
+                        + "The plugin sends your RuneScape display name, team "
+                        + "code, and bingo-board activity."
                         + "<br><br>"
                         + "Your IP address is also transmitted as part of the "
-                        + "internet connection and may be visible to Cloudflare "
-                        + "and the server infrastructure."
+                        + "internet connection."
                         + "<br><br>"
-                        + "The server is <b>not controlled or verified by the "
+                        + "The service is <b>not controlled or verified by the "
                         + "RuneLite Developers</b>."
+                        + "<br><br>"
+                        + "The plugin does not send your RuneScape password, "
+                        + "Jagex credentials, bank, inventory, or chat messages."
                         + "<br><br>"
                         + "Do you want to continue?"
                         + "</div>"
@@ -359,24 +318,20 @@ public class CapstoneClanBingoPanel extends PluginPanel
                         .trim()
                         .toUpperCase();
 
-        if (!code.matches("[A-Z0-9]{6}"))
+        if (!isValidTeamCode(code))
         {
             restoreCurrentTeamCode();
 
             teamStatusLabel.setText(
                     "<html><center>"
                             + "<b>Invalid team code.</b>"
-                            + "<br>"
-                            + "Use exactly 6 letters or numbers."
+                            + "<br>Use exactly 6 letters/numbers."
                             + "</center></html>"
             );
-
             return;
         }
 
-        setBusy(
-                true
-        );
+        setBusy(true);
 
         teamStatusLabel.setText(
                 "<html><center>"
@@ -388,30 +343,22 @@ public class CapstoneClanBingoPanel extends PluginPanel
                 code,
                 (success, message) ->
                 {
-                    setBusy(
-                            false
-                    );
+                    setBusy(false);
 
                     if (!success)
                     {
                         restoreCurrentTeamCode();
 
                         teamStatusLabel.setText(
-                                "<html><center>"
-                                        + "<b>"
+                                "<html><center><b>"
                                         + message
-                                        + "</b>"
-                                        + "</center></html>"
+                                        + "</b></center></html>"
                         );
-
                         return;
                     }
 
-                    joinedTeamCode =
-                            code;
-
-                    currentPlayerName =
-                            null;
+                    joinedTeamCode = code;
+                    currentPlayerName = null;
 
                     teamCodeField.setText(
                             joinedTeamCode
@@ -425,27 +372,41 @@ public class CapstoneClanBingoPanel extends PluginPanel
 
                     closeBoard();
 
-                    openBoardButton.setEnabled(
-                            true
-                    );
+                    openBoardButton.setEnabled(true);
+                    forgetTeamButton.setEnabled(true);
 
-                    forgetTeamButton.setEnabled(
-                            true
-                    );
-
-                    playerStatusLabel.setText(
-                            "<html><center>"
-                                    + "Player: <b>Not detected yet</b>"
-                                    + "</center></html>"
-                    );
+                    if (isDevTeamCode(joinedTeamCode))
+                    {
+                        playerStatusLabel.setText(
+                                "<html><center>"
+                                        + "Player:"
+                                        + "<br><b>"
+                                        + DEV_PLAYER_NAME
+                                        + "</b>"
+                                        + "<br><span style='color:#d6a64c;'>DEV LOGIN BYPASS</span>"
+                                        + "</center></html>"
+                        );
+                    }
+                    else
+                    {
+                        playerStatusLabel.setText(
+                                "<html><center>"
+                                        + "Player: <b>Not detected yet</b>"
+                                        + "</center></html>"
+                        );
+                    }
 
                     teamStatusLabel.setText(
                             "<html><center>"
                                     + "Joined team:"
-                                    + "<br>"
-                                    + "<b>"
+                                    + "<br><b>"
                                     + joinedTeamCode
                                     + "</b>"
+                                    + (
+                                    isDevTeamCode(joinedTeamCode)
+                                            ? "<br><span style='color:#d6a64c;'>DEV TEAM</span>"
+                                            : ""
+                            )
                                     + "</center></html>"
                     );
                 }
@@ -460,27 +421,14 @@ public class CapstoneClanBingoPanel extends PluginPanel
                     joinedTeamCode
             );
 
-            openBoardButton.setEnabled(
-                    true
-            );
-
-            forgetTeamButton.setEnabled(
-                    true
-            );
+            openBoardButton.setEnabled(true);
+            forgetTeamButton.setEnabled(true);
         }
         else
         {
-            teamCodeField.setText(
-                    ""
-            );
-
-            openBoardButton.setEnabled(
-                    false
-            );
-
-            forgetTeamButton.setEnabled(
-                    false
-            );
+            teamCodeField.setText("");
+            openBoardButton.setEnabled(false);
+            forgetTeamButton.setEnabled(false);
         }
     }
 
@@ -488,34 +436,22 @@ public class CapstoneClanBingoPanel extends PluginPanel
     {
         closeBoard();
 
-        joinedTeamCode =
-                null;
-
-        currentPlayerName =
-                null;
+        joinedTeamCode = null;
+        currentPlayerName = null;
 
         configManager.unsetConfiguration(
                 CapstoneClanBingoConfig.GROUP,
                 CapstoneClanBingoConfig.TEAM_CODE_KEY
         );
 
-        teamCodeField.setText(
-                ""
-        );
-
-        openBoardButton.setEnabled(
-                false
-        );
-
-        forgetTeamButton.setEnabled(
-                false
-        );
+        teamCodeField.setText("");
+        openBoardButton.setEnabled(false);
+        forgetTeamButton.setEnabled(false);
 
         teamStatusLabel.setText(
                 "<html><center>"
                         + "Team forgotten."
-                        + "<br>"
-                        + "Enter a new team code to reconnect."
+                        + "<br>Enter a new team code to reconnect."
                         + "</center></html>"
         );
 
@@ -526,32 +462,43 @@ public class CapstoneClanBingoPanel extends PluginPanel
         );
     }
 
-    private void detectPlayerAndLoadBoard()
+    private void detectPlayerAndLoadEverything()
     {
-        // TEMP DEV BYPASS — REMOVE BEFORE FINAL PLUGIN COMMIT
-        if ("FS73DA".equalsIgnoreCase(joinedTeamCode))
-        {
-            currentPlayerName = "DevTester";
-
-            playerStatusLabel.setText(
-                    "<html><center>"
-                            + "Player:"
-                            + "<br>"
-                            + "<b>DevTester</b>"
-                            + "</center></html>"
-            );
-
-            loadBoard();
-            return;
-        }
         if (joinedTeamCode == null)
         {
             return;
         }
 
-        setBusy(
-                true
-        );
+        /*
+         * Dedicated local-development bypass.
+         *
+         * Team code 205 does not require an authenticated/logged-in
+         * RuneScape character. It always acts as DevTester.
+         *
+         * All normal team codes continue through the real RuneLite
+         * player detection flow below.
+         */
+        if (isDevTeamCode(joinedTeamCode))
+        {
+            currentPlayerName =
+                    DEV_PLAYER_NAME;
+
+            playerStatusLabel.setText(
+                    "<html><center>"
+                            + "Player:"
+                            + "<br><b>"
+                            + currentPlayerName
+                            + "</b>"
+                            + "<br><span style='color:#d6a64c;'>DEV LOGIN BYPASS</span>"
+                            + "</center></html>"
+            );
+
+            setBusy(true);
+            loadManifest();
+            return;
+        }
+
+        setBusy(true);
 
         playerStatusLabel.setText(
                 "<html><center>"
@@ -564,12 +511,8 @@ public class CapstoneClanBingoPanel extends PluginPanel
                 {
                     if (!success)
                     {
-                        setBusy(
-                                false
-                        );
-
-                        currentPlayerName =
-                                null;
+                        setBusy(false);
+                        currentPlayerName = null;
 
                         playerStatusLabel.setText(
                                 "<html><center>"
@@ -578,7 +521,6 @@ public class CapstoneClanBingoPanel extends PluginPanel
                                         + message
                                         + "</center></html>"
                         );
-
                         return;
                     }
 
@@ -588,111 +530,118 @@ public class CapstoneClanBingoPanel extends PluginPanel
                     playerStatusLabel.setText(
                             "<html><center>"
                                     + "Player:"
-                                    + "<br>"
-                                    + "<b>"
+                                    + "<br><b>"
                                     + currentPlayerName
                                     + "</b>"
                                     + "</center></html>"
                     );
 
-                    loadBoard();
+                    loadManifest();
                 }
         );
     }
 
-    private void loadBoard()
+    private void loadManifest()
     {
-        if (
-                joinedTeamCode == null
-                        || currentPlayerName == null
-        )
-        {
-            setBusy(
-                    false
-            );
+        teamStatusLabel.setText(
+                "<html><center>"
+                        + "Loading current bingo board..."
+                        + "</center></html>"
+        );
 
-            return;
-        }
+        apiClient.loadBoardManifest(
+                (success, manifest, message) ->
+                {
+                    if (!success)
+                    {
+                        failBoardLoad(message);
+                        return;
+                    }
 
+                    loadImage(manifest);
+                }
+        );
+    }
+
+    private void loadImage(
+            CapstoneClanBingoBoardManifest manifest
+    )
+    {
+        apiClient.loadBoardImage(
+                manifest,
+                (success, image, message) ->
+                {
+                    if (!success)
+                    {
+                        failBoardLoad(message);
+                        return;
+                    }
+
+                    loadTeamState(
+                            manifest,
+                            image
+                    );
+                }
+        );
+    }
+
+    private void loadTeamState(
+            CapstoneClanBingoBoardManifest manifest,
+            BufferedImage image
+    )
+    {
         String teamCode =
                 joinedTeamCode;
 
         String playerName =
                 currentPlayerName;
 
-        teamStatusLabel.setText(
-                "<html><center>"
-                        + "Loading shared board..."
-                        + "</center></html>"
-        );
-
         apiClient.loadBoard(
                 teamCode,
                 (success, board, message) ->
                 {
-                    setBusy(
-                            false
-                    );
+                    setBusy(false);
 
                     if (!success)
                     {
-                        closeBoard();
-
-                        teamStatusLabel.setText(
-                                "<html><center>"
-                                        + "<b>Could not load board.</b>"
-                                        + "<br>"
-                                        + message
-                                        + "</center></html>"
-                        );
-
+                        failBoardLoad(message);
                         return;
                     }
-
-                    openBoardButton.setEnabled(
-                            true
-                    );
-
-                    forgetTeamButton.setEnabled(
-                            true
-                    );
 
                     teamStatusLabel.setText(
                             "<html><center>"
                                     + "Connected to:"
-                                    + "<br>"
-                                    + "<b>"
+                                    + "<br><b>"
                                     + teamCode
                                     + "</b>"
+                                    + (
+                                    isDevTeamCode(teamCode)
+                                            ? "<br><span style='color:#d6a64c;'>DEV TEAM</span>"
+                                            : ""
+                            )
                                     + "</center></html>"
                     );
 
                     playerStatusLabel.setText(
                             "<html><center>"
                                     + "Player:"
-                                    + "<br>"
-                                    + "<b>"
+                                    + "<br><b>"
                                     + playerName
                                     + "</b>"
+                                    + (
+                                    isDevTeamCode(teamCode)
+                                            ? "<br><span style='color:#d6a64c;'>DEV LOGIN BYPASS</span>"
+                                            : ""
+                            )
                                     + "</center></html>"
                     );
 
                     Window runeLiteWindow =
-                            SwingUtilities
-                                    .getWindowAncestor(
-                                            this
-                                    );
+                            SwingUtilities.getWindowAncestor(
+                                    this
+                            );
 
-                    if (
-                            boardWindow != null
-                                    && boardWindow.isDisplayable()
-                    )
-                    {
-                        boardWindow.dispose();
-
-                        boardWindow =
-                                null;
-                    }
+                    closeBoard();
 
                     boardWindow =
                             new CapstoneClanBingoBoardWindow(
@@ -700,13 +649,29 @@ public class CapstoneClanBingoPanel extends PluginPanel
                                     teamCode,
                                     playerName,
                                     apiClient,
+                                    manifest,
+                                    image,
                                     board
                             );
 
-                    boardWindow.setVisible(
-                            true
-                    );
+                    boardWindow.setVisible(true);
                 }
+        );
+    }
+
+    private void failBoardLoad(
+            String message
+    )
+    {
+        setBusy(false);
+        closeBoard();
+
+        teamStatusLabel.setText(
+                "<html><center>"
+                        + "<b>Could not load board.</b>"
+                        + "<br>"
+                        + message
+                        + "</center></html>"
         );
     }
 
@@ -714,13 +679,8 @@ public class CapstoneClanBingoPanel extends PluginPanel
             boolean busy
     )
     {
-        joinTeamButton.setEnabled(
-                !busy
-        );
-
-        teamCodeField.setEnabled(
-                !busy
-        );
+        joinTeamButton.setEnabled(!busy);
+        teamCodeField.setEnabled(!busy);
 
         openBoardButton.setEnabled(
                 !busy
@@ -743,7 +703,6 @@ public class CapstoneClanBingoPanel extends PluginPanel
             boardWindow.dispose();
         }
 
-        boardWindow =
-                null;
+        boardWindow = null;
     }
 }
